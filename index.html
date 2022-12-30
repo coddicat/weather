@@ -1,0 +1,62 @@
+<html>
+  <head>
+    <meta name='viewport' content='user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width; viewport-fit=cover'>
+    <title>Weather station settings</title>
+    <style>
+      .container { 
+        max-width: 340px;
+        margin: auto;
+      }
+      .inputs, .input {
+        display: flex;
+        flex-direction: column;
+      }
+      .inputs {
+        gap: 1em;
+        margin-bottom: 1.5em;
+      }
+      .input > input {
+        font-size: 1.2em;
+      }
+      .buttons {
+        display: flex;
+        flex-direction: row;
+        justify-content: end;
+        gap: 1em;
+      }
+      .buttons > button {
+        font-size: 1.2em;
+      }
+      body {
+        font-size: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class='container'>
+      <header>
+        <h1>Weather station settings</h1>
+        <h3>Wifi status: <span id='status'></span></h3>
+      </header>
+      <form>
+        <fieldset id='wifi-form'>
+          <div class='inputs'>
+            <label for='ssid' class='input'>
+              <span>WiFi SSID:</span>
+              <input type='text' id='ssid' name='ssid'>
+            </label>
+            <label for='password' class='input'>
+              <span>WiFi Password:</span>
+              <input type='password' id='password' name='password'>
+            </label>
+          </div>
+          <div class='buttons'>
+            <button id='connect' type='button' onclick='connectHandler()'>Connect</button>
+            <button id='disconnect' onclick='disconnectHandler()'>Disconnect</button>
+          </div>
+        </fieldset>
+      </form>    
+    </div>
+  
+  </body>
+</html>
