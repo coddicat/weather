@@ -106,7 +106,10 @@ const String html = R"(
           document.getElementById('connect').disabled = false;
           document.getElementById('disconnect').disabled = false;
 
-          if (status.includes('CONNECTING')) {
+          if (status.includes('DISCONNECTED')) {
+            document.getElementById('status').innerHTML = status;
+            document.getElementById('disconnect').disabled = true;            
+          } else if (status.includes('CONNECTING')) {
             document.getElementById('status').innerHTML = status;
             document.getElementById('wifi-form').disabled = true;
           } else if (status.includes('CONNECTED')) {
