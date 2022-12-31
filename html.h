@@ -60,26 +60,51 @@ const String html = R"(
           </div>
         </fieldset>
       </form> 
+      <header>
+        <h3>Weather setting</h3>
+      </header>
+      <form>
+        <fieldset id='weather-form'>
+          <div class='inputs'>
+            <label for='city' class='input'>
+              <span>City:</span>
+              <input type='text' id='city' name='city'>
+            </label>
+            <label for='country' class='input'>
+              <span>Country:</span>
+              <input type='text' id='country' name='country'>
+            </label>
+            <label for='apiKey' class='input'>
+              <span>ApiKey(openweathermap.org):</span>
+              <input type='text' id='apiKey' name='apiKey'>
+            </label>
+          </div>
+          <div class='buttons'>
+            <button id='save' type='button' onclick='saveHandler()'>Save</button>
+          </div>
+        </fieldset>
+      </form> 
     </div>
-    
+
     <script async>
       async function connectHandler() {
         try {
           document.getElementById('wifi-form').disabled = true;
-
           const ssid = document.getElementById('ssid').value;
           const password = document.getElementById('password').value;
-
-          const response = await fetch('/connect', {
+          await fetch('/connect', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded'
             },
             body: `ssid=${ssid}&password=${password}`
           });
-          // handle response
-        } finally {
-          //
+        } 
+        catch(error) {
+          alert(JSON.stringify(error));
+        }
+        finally {
+          document.getElementById('wifi-form').disabled = false;
         }
       }
 
@@ -89,9 +114,46 @@ const String html = R"(
           const response = await fetch('/disconnect', {
             method: 'POST'
           });
-          // handle response
         } finally {
-          //
+          document.getElementById('wifi-form').disabled = false;
+        }
+      }
+
+      async function saveHandler() {
+        try {
+          document.getElementById('weather-form').disabled = true;
+          const city = document.getElementById('city').value;
+          const country = document.getElementById('country').value;
+          const apiKey = document.getElementById('apiKey').value;
+          const response = await fetch('/save', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: `city=${city}&country=${country}&apiKey=${apiKey}`
+          });
+          const text = await response.text();
+          alert(text);
+        }
+        catch(error) {
+          alert(JSON.stringify(error));
+        }
+        finally {
+          document.getElementById('weather-form').disabled = false;
+        }
+      }
+
+      function handleStatus(status) {
+        document.getElementById('status').innerHTML = status;
+        document.getElementById('wifi-form').disabled = false;
+        if (status.includes('CONNECTING')) {
+          document.getElementById('wifi-form').disabled = true;
+        } else if (status == 'CONNECTED') {
+          document.getElementById('connect').disabled = true;
+          document.getElementById('disconnect').disabled = false;
+        } else {
+          document.getElementById('connect').disabled = false;
+          document.getElementById('disconnect').disabled = true;
         }
       }
 
@@ -99,45 +161,41 @@ const String html = R"(
         try {
           const response = await fetch('/status');
           const status = await response.text();
-
-          document.getElementById('ssid').disabled = false;
-          document.getElementById('password').disabled = false;
-          document.getElementById('wifi-form').disabled = false;
-          document.getElementById('connect').disabled = false;
-          document.getElementById('disconnect').disabled = false;
-
-          if (status.includes('DISCONNECTED')) {
-            document.getElementById('status').innerHTML = status;
-            document.getElementById('disconnect').disabled = true;            
-          } else if (status.includes('CONNECTING')) {
-            document.getElementById('status').innerHTML = status;
-            document.getElementById('wifi-form').disabled = true;
-          } else if (status.includes('CONNECTED')) {
-            document.getElementById('ssid').disabled = true;
-            document.getElementById('password').disabled = true;
-            document.getElementById('connect').disabled = true;
-            const ssid = status.substring('CONNECTED'.length + 1);
-            document.getElementById('status').innerHTML = 'CONNECTED';
-            document.getElementById('ssid').value = ssid;
-          } else {
-            document.getElementById('status').innerHTML = status;
-            document.getElementById('disconnect').disabled = true;
-          }
+          handleStatus(status);
         } catch (error) {
-          console.error(error);
           document.getElementById('status').innerHTML = 'N/A';
         } finally {
-          setTimeout(getStatus, 1000);
+          setTimeout(getStatus, 2000);
         }
       }
 
-      getStatus();
+      async function getData() {
+        try {
+          const response = await fetch('/data');
+          const text = await response.text();
+          const data = JSON.parse(text);
+          const wifi = data['wifi'];
+          const weather = data['weather'];
+          const status = wifi['status'];
+          const ssid = wifi['ssid'];
+          const city = weather['city'];
+          const country = weather['country'];
+          const apiKey = weather['apiKey'];
 
+          handleStatus(status);
+          document.getElementById('ssid').value = ssid;
+          document.getElementById('city').value = city;
+          document.getElementById('country').value = country;
+          document.getElementById('apiKey').value = apiKey;
+        } catch (error) {
+          document.getElementById('status').innerHTML = 'N/A';
+        }
+      }
+      getData();
+      setTimeout(getStatus, 2000);
     </script>
   </body>
 </html>
-
-
 )";
 
 #endif

@@ -58,9 +58,9 @@ class WeatherWifi {
     }
     void connect(String ssid, String password) {
       Serial.println("connect:" + ssid + " " +password);      
+      this->status = CONNECTING;
       WiFi.disconnect();
       WiFi.begin(ssid.c_str(), password.c_str());
-      this->status = CONNECTING;
       this->attempts = 0;
     }  
     
