@@ -4,7 +4,7 @@
 #include "button.h"
 #include "display.h"
 #include "spinner.h"
-#include "scrollLine.h"
+//#include "scrollLine.h"
 
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
@@ -15,16 +15,33 @@ WifiStorage wifiStorage;
 WeatherWifi wifi;
 WeatherServer server(80, &wifi, &wifiStorage, &disp);
 
-long lastObtain = -10*60*1000;
+String password;
+String ssid;
+
+const long dsec = 15;
+long lastButton = 0;
+long lastObtain = -dsec*60*1000;
+long lastTime = -1000;
 bool settingsMode = false;
+WifiStatus status = DISCONNECTED;
+bool hasCredentials;
 
 void holdHandler() {
+  lastButton = millis();
+  
   if (settingsMode) return;
+
+  if (status == DISCONNECTED && hasCredentials) {
+    wifi.connect(ssid, password);
+  }
+  
   server.start();
   settingsMode = true;  
   disp.backlight(true);
 }
+
 void clickHandler() {
+  lastButton = millis();
   if (!settingsMode) {
     disp.toggleBacklight();
     return;
@@ -32,34 +49,64 @@ void clickHandler() {
   disp.backlight(true);
   server.stop();
   getStoredData();
-  lastObtain = -10*60*1000;
+  lastObtain = -dsec*60*1000;
   settingsMode = false; 
   disp.writeLine(0, "Wait...");
   disp.writeLine(1, "");   
   displayStatus(); 
 }
 
-WifiStatus status = DISCONNECTED;
 void displayStatus() {  
   char chr;
   switch (status) {
     case CONNECTED: chr = '~'; break;
     case DISCONNECTED:
+      return;
     case FAILED: 
       chr = '!'; break;
   }
-  disp.write(15, 0, chr);
+  disp.write(15, 1, chr);
 }
 
 //https://api.ipgeolocation.io/ipgeo?apiKey=
-
+const String timeUrl = "https://worldtimeapi.org/api/ip";
 const String apiUrl = "https://api.openweathermap.org/data/2.5/weather?q=";
 String city;
 String country;
 String apiKey;
+//ScrollLine scroll(&disp, 500, 1, "-  -  -  -  -  -");
 
-ScrollLine scroll(&disp, 500, 1, "-  -  -  -  -  -");
+long unixTime = 0;
+long timeOn = -1;
+
+void obtainTime() {
+  WiFiClientSecure client;
+  client.setInsecure();
+  HTTPClient https;
+  if (https.begin(client, timeUrl)) {
+      int httpCode = https.GET();
+      Serial.println("Response code: " + String(httpCode));
+      if (httpCode > 0) {
+        StaticJsonDocument<1024> doc;
+        String response = https.getString();
+        DeserializationError error = deserializeJson(doc, response);
+        if (error) {
+          Serial.println("Error parsing JSON");
+        } else {
+          long dt = doc["unixtime"];
+          int tz = doc["raw_offset"];
+          unixTime = dt + tz;          
+        }
+      }
+      https.end();
+  }
+  else {
+    disp.writeLine(0, "Unable to connect");   
+  }   
+}
+
 void obtainWeather() {
+  Serial.println("obtainWeather...");
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient https;
@@ -91,10 +138,10 @@ void obtainWeather() {
             String pressStr = String(press);
 
             char degree[] = { 0xDF, 'C', ' ', 0x00 };
-            String line = tempStr + degree + humiStr + "% " + pressStr;
+           
+            String line = tempStr + degree + humiStr + "% "; 
             disp.writeLine(0, line);
-            disp.writePressure(line.length(), 0);            
-            scroll.setText(main + ": " + desc + ", wind:" + String(fixSpeed) + "km/h, " + city);            
+            disp.writeLine(1, main + " " + String(fixSpeed) + "km/h");
           } else {
             disp.writeLine(0, "Something wrong");
           }          
@@ -116,19 +163,20 @@ void getStoredData() {
 
 void setup() {
   Serial.begin(9600);
+  Serial.println("Begin");
   butt.setHold(2000, holdHandler);
   butt.setClick(clickHandler);
   disp.init();
   server.init();
   wifiStorage.init();
   
-  bool hasCredentials = wifiStorage.hasStored();
+  hasCredentials = wifiStorage.hasStored();
   Serial.println(hasCredentials ? "Has wifi credentials:" : "No wifi credentials");  
   
   if (hasCredentials) {
     getStoredData();
-    String password = wifiStorage.getPassword();
-    String ssid = wifiStorage.getSSID();
+    password = wifiStorage.getPassword();
+    ssid = wifiStorage.getSSID();
     wifi.connect(ssid, password);    
     settingsMode = false;
     disp.writeLine(0, "Wait...");
@@ -137,34 +185,72 @@ void setup() {
     server.start();
     settingsMode = true;
   }
+
+  lastButton = millis();
 }
 
-Spinner spinner(&disp, 300, 15, 0);
+Spinner spinner(&disp, 300, 15, 1);
+
+String separate = ":";
+void showTime() {
+  long diff = (millis() - timeOn) / 1000;
+  long now = unixTime + diff;
+  int hours = now / 3600 % 24;
+  int minutes = now / 60 % 60;
+  String hoursStr = String(hours);
+  String minutesStr = String(minutes);
+  if (hoursStr.length() == 1) hoursStr = "0" + hoursStr;
+  if (minutesStr.length() == 1) minutesStr = "0" + minutesStr;
+  disp.write(11, 0, hoursStr + separate + minutesStr);  
+  separate = separate == ":" ? " " : ":";
+}
+
 void loop() {
   if (settingsMode) {
     server.tick();    
   } else {
     WifiStatus newStatus = wifi.getStatus();
-    if (status != newStatus) {
-      status = newStatus;
-      displayStatus();
-    }   
 
     long now = millis();
     if (status == CONNECTED) {
-      scroll.tick();
-  
-      //5 minutes
-      if (now - lastObtain > 5*60*1000) {
+      //scroll.tick();
+
+      if (timeOn == -1) {
+        obtainTime();
+        timeOn = now;
+      }
+      
+      //15 minutes
+      if (now - lastObtain > dsec*60*1000) {        
         obtainWeather();
-        lastObtain = now;        
+        lastObtain = now;
+        lastButton = now;
+        //ESP.deepSleep(2e7);
+        wifi.disconnect();
       }
     }
+
+    if (now - lastTime > 1000) {
+      showTime();
+      lastTime = now;
+    }      
 
     if (status == CONNECTING) {
       spinner.tick();     
     }
 
+    if (status != newStatus) {
+      status = newStatus;
+      displayStatus();
+    }   
+
+    if (status == DISCONNECTED && now - lastObtain > dsec*60*1000) {
+        wifi.connect(ssid, password);
+    }
+
+    if (now - lastButton > 30*1000 && disp.getBacklight()) {
+      disp.backlight(false);
+    }
   }
   wifi.tick();
   butt.tick(); 

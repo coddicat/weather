@@ -59,6 +59,9 @@ class Display {
     void toggleBacklight() {
       this->backlight(!this->backlightStatus);
     }
+    bool getBacklight() {
+      return this->backlightStatus;
+    }
 };
 
 #endif
